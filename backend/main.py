@@ -212,7 +212,7 @@ def get_current_user(
 # DASHBOARD
 @app.get("/api/dashboard")
 def get_dashboard(
-    authorization: str = "Header(default=""),
+    authorization: str = Header(default=""),
     db: Session = Depends(get_db)
 ):
     if not authorization.startswith("Bearer "):
