@@ -1,0 +1,6 @@
+{
+  "name": "SHAB — Student Helper AI Bot",
+  "description": "Your AI-powered student assistant for learning, documents, summaries, notes, quizzes and intelligent study.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
