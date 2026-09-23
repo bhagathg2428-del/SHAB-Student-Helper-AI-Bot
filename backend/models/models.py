@@ -1,4 +1,5 @@
 import datetime
+import uuid
 from sqlalchemy import Column, String, Integer, Float, Text, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from backend.database.database import Base
@@ -6,7 +7,7 @@ from backend.database.database import Base
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(String, primary_key=True, index=True)
+    id = Column(String, primary_key=True, index=True,default=lambda:str(uuid.uuid44()))
     full_name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
