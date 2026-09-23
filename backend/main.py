@@ -491,6 +491,21 @@ def delete_note(
     return {
         "detail": "Note deleted successfully"
     }
+# FILES - GET
+@app.get("/api/files")
+def get_files(
+    authorization: str = Header(default=""),
+    db: Session = Depends(get_db)
+):
+    user = get_authenticated_user(
+        authorization,
+        db
+    )
+
+    return []
+
+
+
 if __name__ == "__main__":
     import uvicorn
 
