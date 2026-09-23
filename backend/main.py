@@ -209,6 +209,62 @@ def get_current_user(
     }
 
 
+# DASHBOARD
+@app.get("/api/dashboard")
+def get_dashboard(
+    authorization: str = "",
+    db: Session = Depends(get_db)
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
+
+    token = authorization.replace("Bearer ", "")
+
+    try:
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM]
+        )
+        user_id = payload.get("sub")
+
+        if not user_id:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token"
+            )
+
+    except JWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return {
+        "user": {
+            "id": user.id,
+            "full_name": user.full_name,
+            "email": user.email,
+            "created_at": user.created_at
+        },
+        "total_files": 0,
+        "quizzes_taken": 0,
+        "study_notes": 0,
+        "study_progress": 0
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 
