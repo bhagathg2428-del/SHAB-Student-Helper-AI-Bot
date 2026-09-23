@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException,Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
@@ -212,7 +212,7 @@ def get_current_user(
 # DASHBOARD
 @app.get("/api/dashboard")
 def get_dashboard(
-    authorization: str = "",
+    authorization: str = "Header(default=""),
     db: Session = Depends(get_db)
 ):
     if not authorization.startswith("Bearer "):
