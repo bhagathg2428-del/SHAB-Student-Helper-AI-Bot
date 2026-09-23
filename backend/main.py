@@ -264,7 +264,233 @@ def get_dashboard(
         "study_progress": 0
     }
 
+# PROFILE + NOTES API
+from backend.models.models import Note
 
+
+def get_authenticated_user(
+    authorization: str,
+    db: Session
+):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated"
+        )
+
+    token = authorization.replace("Bearer ", "")
+
+    try:
+        payload = jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM]
+        )
+
+        user_id = payload.get("sub")
+
+        if not user_id:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token"
+            )
+
+    except JWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token"
+        )
+
+    user = db.query(User).filter(
+        User.id == user_id
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return user
+
+
+# UPDATE PROFILE
+@app.put("/api/profile")
+def update_profile(
+    data: dict,
+    authorization: str = Header(default=""),
+    db: Session = Depends(get_db)
+):
+    user = get_authenticated_user(authorization, db)
+
+    if data.get("full_name"):
+        user.full_name = data["full_name"]
+
+    if data.get("email"):
+        existing = db.query(User).filter(
+            User.email == data["email"],
+            User.id != user.id
+        ).first()
+
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail="Email already registered"
+            )
+
+        user.email = data["email"]
+
+    if data.get("new_password"):
+        current_password = data.get("current_password")
+
+        if not current_password:
+            raise HTTPException(
+                status_code=400,
+                detail="Current password is required"
+            )
+
+        if not pwd_context.verify(
+            current_password,
+            user.password_hash
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Current password is incorrect"
+            )
+
+        user.password_hash = pwd_context.hash(
+            data["new_password"]
+        )
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "id": user.id,
+        "full_name": user.full_name,
+        "email": user.email,
+        "created_at": user.created_at
+    }
+
+
+# GET NOTES
+@app.get("/api/notes")
+def get_notes(
+    authorization: str = Header(default=""),
+    db: Session = Depends(get_db)
+):
+    user = get_authenticated_user(authorization, db)
+
+    notes = db.query(Note).filter(
+        Note.user_id == user.id
+    ).order_by(
+        Note.updated_at.desc()
+    ).all()
+
+    return [
+        {
+            "id": note.id,
+            "title": note.title,
+            "content": note.content,
+            "created_at": note.created_at,
+            "updated_at": note.updated_at
+        }
+        for note in notes
+    ]
+
+
+# CREATE NOTE
+@app.post("/api/notes")
+def create_note(
+    data: dict,
+    authorization: str = Header(default=""),
+    db: Session = Depends(get_db)
+):
+    user = get_authenticated_user(authorization, db)
+
+    note = Note(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        title=data.get("title", "Untitled"),
+        content=data.get("content", "")
+    )
+
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+
+    return {
+        "id": note.id,
+        "title": note.title,
+        "content": note.content,
+        "created_at": note.created_at,
+        "updated_at": note.updated_at
+    }
+
+
+# UPDATE NOTE
+@app.put("/api/notes/{note_id}")
+def update_note(
+    note_id: str,
+    data: dict,
+    authorization: str = Header(default=""),
+    db: Session = Depends(get_db)
+):
+    user = get_authenticated_user(authorization, db)
+
+    note = db.query(Note).filter(
+        Note.id == note_id,
+        Note.user_id == user.id
+    ).first()
+
+    if not note:
+        raise HTTPException(
+            status_code=404,
+            detail="Note not found"
+        )
+
+    note.title = data.get("title", note.title)
+    note.content = data.get("content", note.content)
+    note.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(note)
+
+    return {
+        "id": note.id,
+        "title": note.title,
+        "content": note.content,
+        "created_at": note.created_at,
+        "updated_at": note.updated_at
+    }
+
+
+# DELETE NOTE
+@app.delete("/api/notes/{note_id}")
+def delete_note(
+    note_id: str,
+    authorization: str = Header(default=""),
+    db: Session = Depends(get_db)
+):
+    user = get_authenticated_user(authorization, db)
+
+    note = db.query(Note).filter(
+        Note.id == note_id,
+        Note.user_id == user.id
+    ).first()
+
+    if not note:
+        raise HTTPException(
+            status_code=404,
+            detail="Note not found"
+        )
+
+    db.delete(note)
+    db.commit()
+
+    return {
+        "detail": "Note deleted successfully"
+    }
 if __name__ == "__main__":
     import uvicorn
 
