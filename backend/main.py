@@ -1,4 +1,5 @@
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Depends, HTTPException
