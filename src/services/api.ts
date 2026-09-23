@@ -1,6 +1,6 @@
 import { User, FileRecord, ChatMessage, Note, QuizQuestion, QuizResult, DashboardData } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = 'https://shab-student-helper-ai-bot.onrender.com/api';
 
 function getToken(): string | null {
   return localStorage.getItem('shab_token');
