@@ -2,14 +2,14 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, Depends, HTTPException,Header
+from fastapi import FastAPI, Depends, HTTPException,Header,UploadFile,File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 from backend.database.database import engine, Base, SessionLocal
-from backend.models.models import User,Note
+from backend.models.models import User,Note,FileRecord
 from backend.schemas.schemas import UserRegister, UserLogin, UserOut
 
 
@@ -503,7 +503,62 @@ def get_files(
     )
 
     return []
+# FILES - UPLOAD
+@app.post("/api/files/upload")
+async def upload_files(
+    files: list[UploadFile] = File(...),
+    authorization: str = Header(default=""),
+    db: Session = Depends(get_db)
+):
+    user = get_authenticated_user(
+        authorization,
+        db
+    )
 
+    upload_dir = "backend/uploads"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    uploaded = []
+
+    for uploaded_file in files:
+        file_id = str(uuid.uuid4())
+
+        filename = uploaded_file.filename
+        save_name = f"{file_id}_{filename}"
+        file_path = os.path.join(
+            upload_dir,
+            save_name
+        )
+
+        content = await uploaded_file.read()
+
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        file_record = FileRecord(
+            id=file_id,
+            user_id=user.id,
+            filename=save_name,
+            original_name=filename,
+            file_type=uploaded_file.content_type or "application/octet-stream",
+            file_size=len(content),
+            extracted_text="",
+            status="Uploaded"
+        )
+
+        db.add(file_record)
+
+        uploaded.append({
+            "id": file_id,
+            "filename": filename,
+            "file_type": uploaded_file.content_type,
+            "file_size": len(content),
+            "status": "Uploaded"
+        })
+
+    db.commit()
+
+    return uploaded
 
 
 if __name__ == "__main__":
