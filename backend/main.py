@@ -9,7 +9,7 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 from backend.database.database import engine, Base, SessionLocal
-from backend.models.models import Note
+from backend.models.models import User,Note
 from backend.schemas.schemas import UserRegister, UserLogin, UserOut
 
 
