@@ -1406,18 +1406,20 @@ Return ONLY valid JSON.
 
 Format:
 
+Format:
+
 {{
   "questions": [
     {{
       "id": "q1",
       "question": "Question text",
-      "options": [
-        "Option A",
-        "Option B",
-        "Option C",
-        "Option D"
-      ],
-      "correctAnswer": "Option A"
+      "options": {{
+        "A": "Option A",
+        "B": "Option B",
+        "C": "Option C",
+        "D": "Option D"
+      }},
+      "correctAnswer": "A"
     }}
   ]
 }}
