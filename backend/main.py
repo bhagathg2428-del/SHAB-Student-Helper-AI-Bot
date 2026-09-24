@@ -655,14 +655,14 @@ def get_files(
 
     return [
         {
-            "id": f.id,
-            "filename": f.original_name,
-            "original_name": f.original_name,
-            "file_type": f.file_type,
-            "file_size": f.file_size,
-            "upload_date": f.upload_date,
-            "status": f.status,
-        }
+    "id": f.id,
+    "name": f.original_name,
+    "type": f.file_type,
+    "size": f.file_size,
+    "upload_date": f.upload_date,
+    "status": f.status,
+    "extracted_text": f.extracted_text or "",
+}
         for f in files
     ]
 
@@ -793,15 +793,15 @@ async def upload_files(
         db.add(file_record)
 
         uploaded.append(
-            {
-                "id": file_id,
-                "filename": original_name,
-                "original_name": original_name,
-                "file_type": file_type,
-                "file_size": len(content),
-                "upload_date": file_record.upload_date,
-                "status": "Processed",
-            }
+           {
+    "id": file_id,
+    "name": original_name,
+    "type": file_type,
+    "size": len(content),
+    "upload_date": file_record.upload_date,
+    "status": "Processed",
+    "extracted_text": extracted_text or "",
+}
         )
 
     db.commit()
