@@ -104,9 +104,7 @@ except Exception:
 def generate_ai_response(prompt: str) -> str:
     """
     Generate an answer using Gemini.
-
-    If Gemini is not configured, return a safe fallback
-    instead of crashing the API.
+    Automatically retries temporary Gemini errors.
     """
 
     if not GEMINI_API_KEY or genai is None:
@@ -115,22 +113,44 @@ def generate_ai_response(prompt: str) -> str:
             "Please add GEMINI_API_KEY in Render environment variables."
         )
 
-    try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
-        response = client.models.generate_content(
-            model="gemini-3.6-flash",
-            contents=prompt,
-        )
+    max_retries = 3
 
-        if response and getattr(response, "text", None):
-            return response.text
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=prompt,
+            )
 
-        return "I couldn't generate an answer right now."
+            if response and response.text:
+                return response.text
 
-    except Exception as e:
-        print("Gemini error:", e)
-        return "AI service is temporarily unavailable."
+            return "Gemini returned an empty response."
+
+        except Exception as e:
+            error_text = str(e)
+            error_code = getattr(e, "code", None)
+
+            # Retry temporary Gemini errors
+            if error_code in (429, 500, 503, 504) or any(
+                code in error_text
+                for code in ["429", "500", "503", "504"]
+            ):
+                if attempt < max_retries - 1:
+                    delay = 2 ** attempt
+                    print(
+                        f"Gemini temporary error. "
+                        f"Retrying in {delay} seconds..."
+                    )
+                    time.sleep(delay)
+                    continue
+
+            print(f"Gemini error: {e}")
+            return "AI service is temporarily unavailable."
+
+    return "AI service is temporarily unavailable."
 
 
 # =========================================================
