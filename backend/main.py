@@ -106,6 +106,7 @@ def generate_ai_response(prompt: str) -> str:
     """
     Generate an answer using Gemini.
     Automatically retries temporary Gemini errors.
+    Cleans simple LaTeX formatting from the response.
     """
 
     if not GEMINI_API_KEY or genai is None:
@@ -126,7 +127,23 @@ def generate_ai_response(prompt: str) -> str:
             )
 
             if response and response.text:
-                return response.text
+                answer = response.text
+
+                # Remove common LaTeX formatting
+                answer = answer.replace(r"\text{", "")
+                answer = answer.replace(r"\mathrm{", "")
+                answer = answer.replace(r"\mathbf{", "")
+                answer = answer.replace("$", "")
+
+                # Convert common chemical formulas to Unicode
+                answer = answer.replace("CO_2", "CO₂")
+                answer = answer.replace("H_2O", "H₂O")
+                answer = answer.replace("O_2", "O₂")
+                answer = answer.replace("N_2", "N₂")
+                answer = answer.replace("H_2", "H₂")
+                answer = answer.replace("O_2", "O₂")
+
+                return answer
 
             return "Gemini returned an empty response."
 
@@ -152,7 +169,6 @@ def generate_ai_response(prompt: str) -> str:
             return "AI service is temporarily unavailable."
 
     return "AI service is temporarily unavailable."
-
 
 # =========================================================
 # DATABASE DEPENDENCY
