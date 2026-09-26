@@ -5,6 +5,10 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import (
     FastAPI,
     Depends,
@@ -94,7 +98,7 @@ pwd_context = CryptContext(
 # GEMINI
 # =========================================================
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or ""
 
 try:
     from google import genai
@@ -165,7 +169,7 @@ def generate_ai_response(prompt: str) -> str:
                     time.sleep(delay)
                     continue
 
-            print(f"Gemini error: {e}")
+            print(f"Gemini error: {type(e).__name__}: {error_text}")
             return "AI service is temporarily unavailable."
 
     return "AI service is temporarily unavailable."
