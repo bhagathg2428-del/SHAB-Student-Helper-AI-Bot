@@ -109,7 +109,8 @@ except Exception:
 def generate_ai_response(prompt: str) -> str:
     """
     Generate an answer using Gemini.
-    Automatically retries temporary Gemini errors.
+    Retries temporary server errors, but does not retry
+    quota/rate-limit errors unnecessarily.
     Cleans simple LaTeX formatting from the response.
     """
 
@@ -145,7 +146,6 @@ def generate_ai_response(prompt: str) -> str:
                 answer = answer.replace("O_2", "O₂")
                 answer = answer.replace("N_2", "N₂")
                 answer = answer.replace("H_2", "H₂")
-                answer = answer.replace("O_2", "O₂")
 
                 return answer
 
@@ -155,10 +155,25 @@ def generate_ai_response(prompt: str) -> str:
             error_text = str(e)
             error_code = getattr(e, "code", None)
 
-            # Retry temporary Gemini errors
-            if error_code in (429, 500, 503, 504) or any(
+            # Do NOT retry quota/rate-limit errors.
+            # A daily quota cannot be fixed by waiting a few seconds.
+            if (
+                error_code == 429
+                or "429" in error_text
+                or "RESOURCE_EXHAUSTED" in error_text
+                or "quota" in error_text.lower()
+            ):
+                print(f"Gemini quota/rate limit reached: {error_text}")
+
+                return (
+                    "The AI daily usage limit has been reached. "
+                    "Please try again after the Gemini quota resets."
+                )
+
+            # Retry temporary server errors only.
+            if error_code in (500, 503, 504) or any(
                 code in error_text
-                for code in ["429", "500", "503", "504"]
+                for code in ["500", "503", "504"]
             ):
                 if attempt < max_retries - 1:
                     delay = 2 ** attempt
@@ -169,7 +184,25 @@ def generate_ai_response(prompt: str) -> str:
                     time.sleep(delay)
                     continue
 
-            print(f"Gemini error: {type(e).__name__}: {error_text}")
+            # Authentication / configuration errors
+            if error_code in (401, 403) or any(
+                code in error_text
+                for code in ["401", "403"]
+            ):
+                print(
+                    f"Gemini authentication/permission error: "
+                    f"{type(e).__name__}: {error_text}"
+                )
+                return (
+                    "The AI service configuration needs attention. "
+                    "Please check the Gemini API configuration."
+                )
+
+            print(
+                f"Gemini error: "
+                f"{type(e).__name__}: {error_text}"
+            )
+
             return "AI service is temporarily unavailable."
 
     return "AI service is temporarily unavailable."
