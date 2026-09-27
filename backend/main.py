@@ -108,102 +108,199 @@ except Exception:
 
 def generate_ai_response(prompt: str) -> str:
     """
-    Generate an answer using Gemini.
-    Retries temporary server errors, but does not retry
-    quota/rate-limit errors unnecessarily.
-    Cleans simple LaTeX formatting from the response.
+    Generate an answer using Gemini first.
+    If Gemini quota is exhausted, automatically fall back to Groq.
+
+    Gemini:
+        Primary AI provider
+
+    Groq:
+        Backup AI provider
     """
 
-    if not GEMINI_API_KEY or genai is None:
-        return (
-            "AI service is not configured yet. "
-            "Please add GEMINI_API_KEY in Render environment variables."
-        )
+    groq_api_key = os.getenv("GROQ_API_KEY", "")
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    def clean_ai_response(answer: str) -> str:
+        """Clean simple LaTeX formatting and common chemical formulas."""
 
-    max_retries = 3
+        answer = answer.replace(r"\text{", "")
+        answer = answer.replace(r"\mathrm{", "")
+        answer = answer.replace(r"\mathbf{", "")
+        answer = answer.replace("$", "")
 
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model="gemini-3.6-flash",
-                contents=prompt,
-            )
+        answer = answer.replace("CO_2", "CO₂")
+        answer = answer.replace("H_2O", "H₂O")
+        answer = answer.replace("O_2", "O₂")
+        answer = answer.replace("N_2", "N₂")
+        answer = answer.replace("H_2", "H₂")
 
-            if response and response.text:
-                answer = response.text
+        return answer
 
-                # Remove common LaTeX formatting
-                answer = answer.replace(r"\text{", "")
-                answer = answer.replace(r"\mathrm{", "")
-                answer = answer.replace(r"\mathbf{", "")
-                answer = answer.replace("$", "")
+    # =========================================================
+    # 1. TRY GEMINI FIRST
+    # =========================================================
 
-                # Convert common chemical formulas to Unicode
-                answer = answer.replace("CO_2", "CO₂")
-                answer = answer.replace("H_2O", "H₂O")
-                answer = answer.replace("O_2", "O₂")
-                answer = answer.replace("N_2", "N₂")
-                answer = answer.replace("H_2", "H₂")
+    if GEMINI_API_KEY and genai is not None:
 
-                return answer
+        client = genai.Client(api_key=GEMINI_API_KEY)
 
-            return "Gemini returned an empty response."
+        max_retries = 3
 
-        except Exception as e:
-            error_text = str(e)
-            error_code = getattr(e, "code", None)
+        for attempt in range(max_retries):
 
-            # Do NOT retry quota/rate-limit errors.
-            # A daily quota cannot be fixed by waiting a few seconds.
-            if (
-                error_code == 429
-                or "429" in error_text
-                or "RESOURCE_EXHAUSTED" in error_text
-                or "quota" in error_text.lower()
-            ):
-                print(f"Gemini quota/rate limit reached: {error_text}")
+            try:
 
-                return (
-                    "The AI daily usage limit has been reached. "
-                    "Please try again after the Gemini quota resets."
+                response = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=prompt,
                 )
 
-            # Retry temporary server errors only.
-            if error_code in (500, 503, 504) or any(
-                code in error_text
-                for code in ["500", "503", "504"]
-            ):
-                if attempt < max_retries - 1:
-                    delay = 2 ** attempt
-                    print(
-                        f"Gemini temporary error. "
-                        f"Retrying in {delay} seconds..."
-                    )
-                    time.sleep(delay)
-                    continue
+                if response and response.text:
 
-            # Authentication / configuration errors
-            if error_code in (401, 403) or any(
-                code in error_text
-                for code in ["401", "403"]
-            ):
+                    return clean_ai_response(response.text)
+
+                print("Gemini returned an empty response.")
+
+                break
+
+            except Exception as e:
+
+                error_text = str(e)
+                error_code = getattr(e, "code", None)
+
+                # -------------------------------------------------
+                # GEMINI QUOTA / RATE LIMIT
+                # -------------------------------------------------
+
+                if (
+                    error_code == 429
+                    or "429" in error_text
+                    or "RESOURCE_EXHAUSTED" in error_text
+                    or "quota" in error_text.lower()
+                ):
+
+                    print(
+                        "Gemini quota/rate limit reached. "
+                        "Switching to Groq..."
+                    )
+
+                    break
+
+                # -------------------------------------------------
+                # TEMPORARY GEMINI SERVER ERROR
+                # -------------------------------------------------
+
+                if error_code in (500, 503, 504) or any(
+                    code in error_text
+                    for code in ["500", "503", "504"]
+                ):
+
+                    if attempt < max_retries - 1:
+
+                        delay = 2 ** attempt
+
+                        print(
+                            f"Gemini temporary error. "
+                            f"Retrying in {delay} seconds..."
+                        )
+
+                        time.sleep(delay)
+
+                        continue
+
+                # -------------------------------------------------
+                # GEMINI AUTH / PERMISSION ERROR
+                # -------------------------------------------------
+
+                if error_code in (401, 403) or any(
+                    code in error_text
+                    for code in ["401", "403"]
+                ):
+
+                    print(
+                        "Gemini authentication/permission error."
+                    )
+
+                    break
+
                 print(
-                    f"Gemini authentication/permission error: "
+                    f"Gemini error: "
                     f"{type(e).__name__}: {error_text}"
                 )
-                return (
-                    "The AI service configuration needs attention. "
-                    "Please check the Gemini API configuration."
-                )
+
+                break
+
+    # =========================================================
+    # 2. FALL BACK TO GROQ
+    # =========================================================
+
+    if groq_api_key:
+
+        try:
+
+            print("Using Groq fallback AI...")
+
+            groq_client = Groq(
+                api_key=groq_api_key
+            )
+
+            completion = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are SHAB, a Student Helper AI Bot. "
+                            "Answer students clearly and accurately. "
+                            "Use simple language suitable for college "
+                            "students. Format answers with headings, "
+                            "numbered lists, bullet points, examples, "
+                            "and key takeaways when useful."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ],
+                temperature=0.3,
+            )
+
+            if completion.choices:
+
+                answer = completion.choices[0].message.content
+
+                if answer:
+
+                    return clean_ai_response(answer)
+
+            return "Groq returned an empty response."
+
+        except Exception as e:
+
+            error_text = str(e)
 
             print(
-                f"Gemini error: "
+                f"Groq error: "
                 f"{type(e).__name__}: {error_text}"
             )
 
-            return "AI service is temporarily unavailable."
+            return (
+                "Both AI services are temporarily unavailable. "
+                "Please try again later."
+            )
+
+    # =========================================================
+    # 3. NO AI PROVIDER AVAILABLE
+    # =========================================================
+
+    if not GEMINI_API_KEY and not groq_api_key:
+
+        return (
+            "AI service is not configured yet. "
+            "Please add GEMINI_API_KEY or GROQ_API_KEY "
+            "in Render environment variables."
+        )
 
     return "AI service is temporarily unavailable."
 
