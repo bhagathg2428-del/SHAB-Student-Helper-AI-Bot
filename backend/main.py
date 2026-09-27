@@ -303,7 +303,6 @@ def generate_ai_response(prompt: str) -> str:
         )
 
     return "AI service is temporarily unavailable."
-
 # =========================================================
 # DATABASE DEPENDENCY
 # =========================================================
