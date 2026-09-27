@@ -1970,7 +1970,104 @@ async def extract_ocr(
 
     image_bytes = await image.read()
 
-    # Try pytesseract if available
+    if not image_bytes:
+        return {
+            "extractedText": "",
+            "message": "No image was uploaded.",
+        }
+
+    # =========================================================
+    # 1. TRY GROQ VISION OCR
+    # =========================================================
+
+    groq_api_key = os.getenv("GROQ_API_KEY", "")
+
+    if groq_api_key:
+
+        try:
+            import base64
+            from groq import Groq
+
+            # Prevent extremely large image requests
+            if len(image_bytes) > 20 * 1024 * 1024:
+                return {
+                    "extractedText": "",
+                    "message": "Image is too large. Please upload an image below 20 MB.",
+                }
+
+            encoded_image = base64.b64encode(
+                image_bytes
+            ).decode("utf-8")
+
+            content_type = (
+                image.content_type
+                or "image/jpeg"
+            )
+
+            image_data_url = (
+                f"data:{content_type};base64,{encoded_image}"
+            )
+
+            groq_client = Groq(
+                api_key=groq_api_key
+            )
+
+            completion = groq_client.chat.completions.create(
+                model="qwen/qwen3.8-27b",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": (
+                                    "Perform OCR on this image. "
+                                    "Extract ALL visible text exactly as written. "
+                                    "Preserve headings, paragraphs, bullet points, "
+                                    "numbers, and line breaks as much as possible. "
+                                    "Do not explain the image. "
+                                    "Return only the extracted text."
+                                ),
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": image_data_url
+                                },
+                            },
+                        ],
+                    }
+                ],
+                temperature=0,
+                max_completion_tokens=4096,
+            )
+
+            if completion.choices:
+
+                extracted_text = (
+                    completion.choices[0]
+                    .message
+                    .content
+                )
+
+                if extracted_text:
+                    return {
+                        "extractedText": extracted_text.strip(),
+                        "message": "Text extracted successfully using AI OCR.",
+                    }
+
+        except Exception as e:
+
+            print(
+                "Groq OCR error:",
+                type(e).__name__,
+                str(e),
+            )
+
+    # =========================================================
+    # 2. FALLBACK TO PYTESSERACT
+    # =========================================================
+
     try:
 
         from PIL import Image
@@ -1985,23 +2082,32 @@ async def extract_ocr(
             img
         )
 
-        return {
-            "extractedText": extracted_text
-        }
+        if extracted_text.strip():
+
+            return {
+                "extractedText": extracted_text.strip(),
+                "message": "Text extracted successfully using OCR.",
+            }
 
     except Exception as e:
 
-        print("OCR error:", e)
+        print(
+            "Pytesseract OCR error:",
+            type(e).__name__,
+            str(e),
+        )
 
-        return {
-            "extractedText": "",
-            "message": (
-                "OCR engine is not available "
-                "on the server."
-            ),
-        }
+    # =========================================================
+    # 3. BOTH OCR METHODS FAILED
+    # =========================================================
 
-
+    return {
+        "extractedText": "",
+        "message": (
+            "OCR could not extract text from this image. "
+            "Please try a clearer image."
+        ),
+    }
 # =========================================================
 # ROOT
 # =========================================================
