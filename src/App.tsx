@@ -141,6 +141,10 @@ const MainAppContent: React.FC = () => {
         <TopNavbar
           title={getTabTitle(currentTab)}
           onOpenSidebar={() => setIsSidebarOpen(true)}
+          onNavigate={(tab) => {
+            setCurrentTab(tab);
+            setIsSidebarOpen(false);
+          }}
         />
 
         <main className="flex-1 bg-[#F8FAFC]">{renderCurrentTab()}</main>
